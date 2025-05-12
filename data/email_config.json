@@ -1,0 +1,10 @@
+{
+    "smtp_server": "smtp.gmail.com",
+    "smtp_port": 587,
+    "smtp_username": "",
+    "smtp_password": "",
+    "sender_name": "Sistema Cl\u00ednico",
+    "sender_email": "",
+    "use_tls": true,
+    "templates_path": "templates/email"
+}

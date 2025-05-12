@@ -205,10 +205,10 @@ class AppointmentsFrame(ttk.Frame):
                 appointment['notes'] if appointment['notes'] else ""
             ))
 
-    def on_date_selected(self):
+    def on_date_selected(self, event=None):
         """Maneja la selección de fecha en el calendario"""
         selected_date = self.calendar.get_date()
-        self.date_entry.set_date(datetime.datetime.strptime(selected_date, "%d/%m/%Y"))
+        self.date_entry.set_date(datetime.strptime(selected_date, "%d/%m/%Y"))
         self.search_appointments()
 
     def on_date_entry_selected(self):
@@ -340,12 +340,20 @@ class AppointmentsFrame(ttk.Frame):
         try:
             # Obtener datos completos de la cita
             appointment = self.appointment_manager.get_appointment_by_id(appointment_id)
-            patient = self.patient_manager.get_patient_by_id(appointment['patient_id'])
+            if not appointment:
+                messagebox.showerror("Error", "No se encontró la cita seleccionada.")
+                return
 
-            # Construir mensaje
+            # Usamos los nombres de campos consistentes
+            patient = self.patient_manager.get_patient_by_id(appointment['patient_id'])
+            if not patient:
+                messagebox.showerror("Error", "No se encontró el paciente asociado a esta cita.")
+                return
+
+            # Construir mensaje usando los nombres correctos de los campos
             subject = f"Recordatorio de cita - {appointment['date']} {appointment['start_time']}"
             body = f"""
-            Estimado/a {patient['first_name']} {patient['last_name']},
+            Estimado/a {patient['nombre']} {patient['apellidos']},
 
             Le recordamos su cita programada para:
 
@@ -356,6 +364,11 @@ class AppointmentsFrame(ttk.Frame):
 
             Por favor confirme su asistencia.
             """
+
+            # Verificar que el email existe
+            if not patient.get('email'):
+                messagebox.showerror("Error", "El paciente no tiene un email registrado.")
+                return
 
             # Enviar email
             send_appointment_email(patient['email'], subject, body)

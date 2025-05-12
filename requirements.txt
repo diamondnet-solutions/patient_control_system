@@ -1,4 +1,5 @@
-Pillow==10.0.0          # Para manejo de imágenes (PIL)
+Pillow~=11.2.1
 tkcalendar==1.6.1       # Widget de calendario para tkinter
-matplotlib==3.7.2       # Para gráficos y reportes
-pandas==2.0.3           # Para análisis de datos
+matplotlib~=3.10.1
+pandas~=2.2.3
+fpdf2~=2.8.3
