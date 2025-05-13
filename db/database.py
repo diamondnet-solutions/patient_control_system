@@ -254,17 +254,25 @@ class DatabaseManager:
 
         # Tabla de seguimiento de emails
         cursor.execute('''
-            CREATE TABLE IF NOT EXISTS email_tracking (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                appointment_id INTEGER,
-                sent_date TEXT DEFAULT CURRENT_TIMESTAMP,
-                email_type TEXT,
-                recipient_email TEXT,
-                status TEXT DEFAULT 'sent',
-                response_date TEXT,
-                response_content TEXT,
-                FOREIGN KEY (appointment_id) REFERENCES appointments (id)
-            )
+                       CREATE TABLE IF NOT EXISTS email_tracking
+                       (
+                           id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                           tracking_id      TEXT UNIQUE NOT NULL,              -- UUID para identificación única
+                           appointment_id   INTEGER,                           -- Relación con citas
+                           email_type       TEXT,                              -- Tipo de email (confirmación, recordatorio, etc.)
+                           recipient_email  TEXT        NOT NULL,              -- Email del destinatario
+                           subject          TEXT        NOT NULL,              -- Asunto del email
+                           sent_date        TEXT    DEFAULT CURRENT_TIMESTAMP, -- Fecha de envío (automática)
+                           status           TEXT    DEFAULT 'sent',            -- Estado (sent, delivered, read, failed)
+                           delivery_status  TEXT,                              -- Estado de entrega (opcional para servicios avanzados)
+                           open_count       INTEGER DEFAULT 0,                 -- Veces que se abrió el email
+                           last_open_date   TEXT,                              -- Última fecha de apertura
+                           response_content TEXT,                              -- Contenido de la respuesta
+                           response_date    TEXT,                              -- Fecha de respuesta
+                           error_message    TEXT,                              -- Mensaje de error si falla el envío
+                           metadata         TEXT,                              -- JSON con datos adicionales
+                           FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+                       )
         ''')
 
         conn.commit()

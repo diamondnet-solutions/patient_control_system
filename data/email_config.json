@@ -1,10 +1,10 @@
 {
     "smtp_server": "smtp.gmail.com",
     "smtp_port": 587,
-    "smtp_username": "",
-    "smtp_password": "",
+    "smtp_username": "193003@unsaac.edu.pe",
+    "smtp_password": "hdcl anmm ockn znem",
     "sender_name": "Sistema Cl\u00ednico",
-    "sender_email": "",
+    "sender_email": "193003@unsaac.edu.pe",
     "use_tls": true,
     "templates_path": "templates/email"
 }

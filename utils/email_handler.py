@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Módulo para el manejo de correos electrónicos
+Módulo mejorado para el manejo de correos electrónicos con seguimiento avanzado
 """
 
 import os
@@ -9,9 +9,11 @@ import smtplib
 import logging
 import uuid
 import json
+
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.mime.application import MIMEApplication
+
 from string import Template
 from datetime import datetime
 import sqlite3
@@ -34,15 +36,15 @@ class EmailConfig:
         Args:
             config_path (str, optional): Ruta al archivo de configuración de correo
         """
+        self.config_path = config_path  # Asegúrate de asignar esto primero
+
         # Si no se proporciona una ruta específica, usar la predeterminada
         if config_path is None:
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             self.config_path = os.path.join(base_dir, 'data', 'email_config.json')
-        else:
-            self.config_path = config_path
 
         # Cargar la configuración
-        self.config = self._load_config()
+        self.config = self._load_config()  # Luego cargar la configuración
 
     def _load_config(self):
         """
@@ -164,131 +166,133 @@ class EmailTracker:
             cursor = conn.cursor()
 
             cursor.execute('''
-                           CREATE TABLE IF NOT EXISTS email_tracking
-                           (
-                               id
-                               INTEGER
-                               PRIMARY
-                               KEY
-                               AUTOINCREMENT,
-                               tracking_id
-                               TEXT
-                               UNIQUE
-                               NOT
-                               NULL,
-                               appointment_id
-                               INTEGER,
-                               recipient_email
-                               TEXT
-                               NOT
-                               NULL,
-                               subject
-                               TEXT
-                               NOT
-                               NULL,
-                               sent_date
-                               TEXT
-                               NOT
-                               NULL,
-                               status
-                               TEXT
-                               DEFAULT
-                               'sent',
-                               response
-                               TEXT,
-                               response_date
-                               TEXT,
-                               FOREIGN
-                               KEY
-                           (
-                               appointment_id
-                           ) REFERENCES appointments
-                           (
-                               id
-                           )
-                               )
-                           ''')
-
+            CREATE TABLE IF NOT EXISTS email_tracking (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    tracking_id TEXT UNIQUE NOT NULL,
+                    appointment_id INTEGER,
+                    email_type TEXT,
+                    recipient_email TEXT NOT NULL,
+                    subject TEXT NOT NULL,
+                    sent_date TEXT DEFAULT CURRENT_TIMESTAMP,
+                    status TEXT DEFAULT 'sent',
+                    delivery_status TEXT,
+                    open_count INTEGER DEFAULT 0,
+                    last_open_date TEXT,
+                    response_content TEXT,
+                    response_date TEXT,
+                    error_message TEXT,
+                    metadata TEXT,
+                    FOREIGN KEY (appointment_id) REFERENCES appointments (id)
+                )
+            ''')
             conn.commit()
             conn.close()
-            logger.info("Tabla de seguimiento de correos creada o verificada correctamente")
+            logger.info("Tabla de seguimiento de correos creada/verificada correctamente")
         except sqlite3.Error as e:
             logger.error(f"Error al crear tabla de seguimiento de correos: {e}")
 
-    def register_email(self, recipient_email, subject, appointment_id=None):
+    def register_email(self, recipient_email, subject, email_type=None, appointment_id=None, metadata=None):
         """
-        Registra un correo enviado en la base de datos
+        Registra un correo en la base de datos con la nueva estructura
 
         Args:
-            recipient_email (str): Correo electrónico del destinatario
-            subject (str): Asunto del correo
-            appointment_id (int, optional): ID de la cita relacionada
+            recipient_email: Email del destinatario
+            subject: Asunto del email
+            email_type: Tipo de email (confirmación, recordatorio, etc.)
+            appointment_id: ID de cita relacionada
+            metadata: Diccionario con metadatos adicionales
 
         Returns:
-            str: ID de seguimiento único o None si ocurrió un error
+            str: tracking_id o None si falla
         """
         try:
             tracking_id = str(uuid.uuid4())
-            current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            metadata_json = json.dumps(metadata) if metadata else None
 
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
             cursor.execute('''
-                           INSERT INTO email_tracking
-                               (tracking_id, appointment_id, recipient_email, subject, sent_date)
-                           VALUES (?, ?, ?, ?, ?)
-                           ''', (tracking_id, appointment_id, recipient_email, subject, current_date))
+                           INSERT INTO email_tracking (
+                               tracking_id, 
+                               appointment_id, 
+                               email_type,                 
+                               recipient_email, 
+                               subject, 
+                               metadata)
+                           VALUES (?, ?, ?, ?, ?, ?)
+                           ''', (tracking_id, appointment_id, email_type,
+                                 recipient_email, subject, metadata_json))
 
             conn.commit()
             conn.close()
 
-            logger.info(f"Correo registrado con ID de seguimiento: {tracking_id}")
+            logger.info(f"Correo registrado con ID: {tracking_id}")
             return tracking_id
         except sqlite3.Error as e:
-            logger.error(f"Error al registrar correo enviado: {e}")
+            logger.error(f"Error al registrar correo: {e}")
             return None
 
-    def update_email_status(self, tracking_id, status, response=None):
+    def update_email_status(self, tracking_id, status, delivery_status=None, error_message=None):
         """
         Actualiza el estado de un correo enviado
 
         Args:
-            tracking_id (str): ID de seguimiento del correo
-            status (str): Nuevo estado ('confirmed', 'cancelled', 'read', etc.)
-            response (str, optional): Respuesta recibida
+            tracking_id: ID de seguimiento
+            status: Nuevo estado (sent, delivered, opened, etc.)
+            delivery_status: Estado de entrega del proveedor SMTP
+            error_message: Mensaje de error si falló
 
         Returns:
-            bool: True si se actualizó correctamente, False en caso contrario
+            bool: True si éxito, False si falla
         """
         try:
-            current_date = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
 
-            if response:
+            if error_message:
                 cursor.execute('''
                                UPDATE email_tracking
-                               SET status        = ?,
-                                   response      = ?,
-                                   response_date = ?
+                               SET status          = ?,
+                                   delivery_status = ?,
+                                   error_message   = ?
                                WHERE tracking_id = ?
-                               ''', (status, response, current_date, tracking_id))
+                               ''', (status, delivery_status, error_message, tracking_id))
             else:
                 cursor.execute('''
                                UPDATE email_tracking
-                               SET status = ?
+                               SET status          = ?,
+                                   delivery_status = ?
                                WHERE tracking_id = ?
-                               ''', (status, tracking_id))
+                               ''', (status, delivery_status, tracking_id))
 
             conn.commit()
             conn.close()
-
-            logger.info(f"Estado del correo {tracking_id} actualizado a: {status}")
             return True
         except sqlite3.Error as e:
-            logger.error(f"Error al actualizar estado del correo: {e}")
+            logger.error(f"Error al actualizar estado: {e}")
+            return False
+
+    def record_email_open(self, tracking_id):
+        """Registra que un email fue abierto"""
+        try:
+            current_date = datetime.now().isoformat()
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+
+            cursor.execute('''
+                           UPDATE email_tracking
+                           SET open_count     = open_count + 1,
+                               last_open_date = ?,
+                               status         = 'opened'
+                           WHERE tracking_id = ?
+                           ''', (current_date, tracking_id))
+
+            conn.commit()
+            conn.close()
+            return True
+        except sqlite3.Error as e:
+            logger.error(f"Error al registrar apertura: {e}")
             return False
 
     def get_email_by_tracking_id(self, tracking_id):
@@ -347,7 +351,7 @@ class EmailTracker:
 
 
 class EmailSender:
-    """Clase para enviar correos electrónicos"""
+    """Clase para enviar correos electrónicos con el nuevo sistema de tracking"""
 
     def __init__(self, config_path=None):
         """
@@ -360,7 +364,7 @@ class EmailSender:
         self.email_tracker = EmailTracker()
 
     def send_email(self, recipient_email, subject, body_text, body_html=None,
-                   attachments=None, appointment_id=None):
+                  attachments=None, email_type=None, appointment_id=None, metadata=None):
         """
         Envía un correo electrónico
 
@@ -375,29 +379,42 @@ class EmailSender:
         Returns:
             str: ID de seguimiento del correo o None si falla
         """
-        # Verificar si hay configuración válida
         if not self.email_config.is_configured():
-            logger.error("No se ha configurado el correo electrónico")
+            logger.error("Configuración de correo no completada")
             return None
 
         config = self.email_config.get_config()
 
+        # Registrar el email antes de enviarlo
+        tracking_id = self.email_tracker.register_email(
+            recipient_email=recipient_email,
+            subject=subject,
+            email_type=email_type,
+            appointment_id=appointment_id,
+            metadata=metadata
+        )
+
+        if not tracking_id:
+            logger.error("No se pudo registrar el correo para tracking")
+            return None
+
         try:
-            # Crear mensaje
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
-            msg['From'] = f"{config.get('sender_name', 'Sistema Clínico')} <{config['sender_email']}>"
+            msg['From'] = f"{config.get('sender_name', 'Sistema')} <{config['sender_email']}>"
             msg['To'] = recipient_email
 
-            # Añadir partes del mensaje
-            part1 = MIMEText(body_text, 'plain', 'utf-8')
-            msg.attach(part1)
+            # Añadir headers para tracking
+            msg['X-Tracking-ID'] = tracking_id
+            if appointment_id:
+                msg['X-Appointment-ID'] = str(appointment_id)
 
+            # Partes del mensaje (texto y HTML)
+            msg.attach(MIMEText(body_text, 'plain', 'utf-8'))
             if body_html:
-                part2 = MIMEText(body_html, 'html', 'utf-8')
-                msg.attach(part2)
+                msg.attach(MIMEText(body_html, 'html', 'utf-8'))
 
-            # Añadir archivos adjuntos
+            # Adjuntos
             if attachments:
                 for file_path in attachments:
                     if os.path.exists(file_path):
@@ -405,35 +422,42 @@ class EmailSender:
                             part = MIMEApplication(f.read(), Name=os.path.basename(file_path))
                         part['Content-Disposition'] = f'attachment; filename="{os.path.basename(file_path)}"'
                         msg.attach(part)
-                    else:
-                        logger.warning(f"Archivo adjunto no encontrado: {file_path}")
 
-            # Registrar correo en base de datos
-            tracking_id = self.email_tracker.register_email(recipient_email, subject, appointment_id)
-
-            if not tracking_id:
-                logger.error("No se pudo registrar el correo en la base de datos")
-                return None
-
-            # Conectar al servidor SMTP
-            server = smtplib.SMTP(config['smtp_server'], config['smtp_port'])
-            server.ehlo()
-
-            if config.get('use_tls', True):
-                server.starttls()
+            # Envío SMTP
+            with smtplib.SMTP(config['smtp_server'], config['smtp_port']) as server:
                 server.ehlo()
+                if config.get('use_tls', True):
+                    server.starttls()
+                    server.ehlo()
+                server.login(config['smtp_username'], config['smtp_password'])
+                server.send_message(msg)
 
-            server.login(config['smtp_username'], config['smtp_password'])
+            # Actualizar estado a delivered
+            self.email_tracker.update_email_status(
+                tracking_id=tracking_id,
+                status='delivered',
+                delivery_status='sent_to_provider'
+            )
 
-            # Enviar correo
-            server.sendmail(config['sender_email'], recipient_email, msg.as_string())
-            server.quit()
-
-            logger.info(f"Correo enviado a {recipient_email} con ID: {tracking_id}")
+            logger.info(f"Email enviado a {recipient_email} (ID: {tracking_id})")
             return tracking_id
 
+        except smtplib.SMTPException as e:
+            logger.error(f"Error SMTP al enviar email: {e}")
+            self.email_tracker.update_email_status(
+                tracking_id=tracking_id,
+                status='failed',
+                error_message=str(e)
+            )
+            return None
+
         except Exception as e:
-            logger.error(f"Error al enviar correo: {e}")
+            logger.error(f"Error inesperado al enviar email: {e}")
+            self.email_tracker.update_email_status(
+                tracking_id=tracking_id,
+                status='failed',
+                error_message=str(e)
+            )
             return None
 
     def send_template_email(self, recipient_email, subject, template_name,
