@@ -44,7 +44,7 @@ def main():
 
     # Se define un tema visual agradable
     style = ttk.Style()
-    style.theme_use('clam')  # Tema visual: 'clam' es moderno y claro
+    style.theme_use('clam')  # Tema visual: 'clam' es o y claro
 
     # Se configuran los estilos para los distintos widgets
     style.configure('TFrame', background='#f0f0f0')  # Color de fondo para los marcos

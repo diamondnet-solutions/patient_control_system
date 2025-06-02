@@ -1,209 +1,515 @@
 # =============================================
 # Nombre del archivo: appointment.py
-# Propósito: Gestión integral de citas médicas (creación, modificación, cancelación)
+# Propósito: Gestión integral de citas médicas con interfaz a
 # Empresa: DiamondNetSolutions
-# Autor: Eliazar
-# Fecha de creación: 30/04/2025
+# Autor original: Eliazar
+# Modificado por: Claude
+# Fecha de modificación: 17/05/2025
 # =============================================
 
-import tkinter as tk
-from tkinter import ttk, messagebox
 import re
-
 from datetime import datetime
-from typing import Optional, Dict, Any
+
+import customtkinter as ctk
+import tkinter as tk
 from tkcalendar import Calendar, DateEntry
+from CTkMessagebox import CTkMessagebox
 
 from core.appointment_manager import AppointmentManager
 from core.patient_manager import PatientManager
 from core.treatment_manager import TreatmentManager
 from utils.email_handler import send_appointment_email
 
+# Configuración de tema de CustomTkinter
+ctk.set_appearance_mode("light")  # Modos: system (default), light, dark
+ctk.set_default_color_theme("blue")  # Temas: blue (default), dark-blue, green
 
-class AppointmentsFrame(ttk.Frame):
+class AppointmentsFrame(ctk.CTkFrame):
     def __init__(self, parent):
         super().__init__(parent)
-        self.appointments_table = None
-        self.email_button = None
-        self.edit_button = None
-        self.table_frame = None
-        self.patient_combo = None
+
+        # Variables de clase
+        self.colors = None
+        self.selection_label = None
+        self.search_button = None
+        self.search_button = None
         self.action_frame = None
-        self.new_button = None
-        self.complete_button = None
-        self.cancel_button = None
+        self.insurance_combo = None
+        self.insurance_var = None
+        self.status_combo = None
         self.status_var = None
         self.patient_var = None
-        self.search_button = None
-        self.status_combo = None
+        self.patient_combo = None
         self.date_entry = None
-        self.filter_frame = None
         self.calendar = None
-        self.calendar_frame = None
+        self.right_panel = None
+        self.left_panel = None
         self.top_frame = None
-        self.pack(fill=tk.BOTH, expand=True)
+        self.new_button = None
+        self.header_frame = None
+        self.appointments_container = None
+        self.selected_appointments = set()
+        self.appointment_cards = {}
+        self.filter_values = {
+            "date": None,
+            "patient_id": None,
+            "status": None,
+            "insurance_type": None
+        }
 
         # Inicializar managers
         self.appointment_manager = AppointmentManager()
         self.patient_manager = PatientManager()
         self.treatment_manager = TreatmentManager()
 
+        # Configurar colores
+        self.configure(fg_color="#F5F7FA")
+
         # Configurar interfaz
+        self.pack(fill="both", expand=True)
         self.setup_ui()
 
         # Cargar datos iniciales
-        self.load_appointments()
+        self.load_appointments_table()
 
     def setup_ui(self):
-        """Configura la interfaz de usuario para la gestión de citas"""
-        # Marco superior con calendario y filtros
-        self.top_frame = ttk.Frame(self)
-        self.top_frame.pack(fill=tk.X, pady=10)
+        """Configurar la interfaz de usuario para la gestión de citas"""
+        # Marco de encabezado
+        self.header_frame = ctk.CTkFrame(self, fg_color="#FFFFFF", height=60)
+        self.header_frame.pack(fill="x", padx=0, pady=(0, 10))
 
-        # Parte izquierda: Calendario
-        self.calendar_frame = ttk.LabelFrame(self.top_frame, text="Calendario")
-        self.calendar_frame.pack(side=tk.LEFT, padx=10, pady=5, fill=tk.BOTH, expand=True)
+        # Título
+        title_label = ctk.CTkLabel(
+            self.header_frame,
+            text="Citas Médicas",
+            font=("Roboto", 22, "bold")
+        )
+        title_label.pack(side="left", padx=20, pady=10)
 
-        self.calendar = Calendar(self.calendar_frame, selectmode='day',
-                                 locale='es_ES',
-                                 date_pattern='dd/mm/yyyy')
-        self.calendar.pack(padx=10, pady=10)
+        # Botón de nueva cita
+        self.new_button = ctk.CTkButton(
+            self.header_frame,
+            text="+ Nueva Cita",
+            font=("Roboto", 14),
+            fg_color="#28C7A2",
+            hover_color="#1DAA8B",
+            corner_radius=8,
+            command=self.new_appointment
+        )
+        self.new_button.pack(side="right", padx=20, pady=10)
+
+        # Marco para filtros y calendario
+        self.top_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.top_frame.pack(fill="x", padx=20, pady=(0, 10))
+
+        # Dividir en dos paneles
+        self.left_panel = ctk.CTkFrame(self.top_frame, fg_color="#FFFFFF", corner_radius=10)
+        self.left_panel.pack(side="left", fill="y", padx=(0, 10), expand=False)
+
+        self.right_panel = ctk.CTkFrame(self.top_frame, fg_color="#FFFFFF", corner_radius=10)
+        self.right_panel.pack(side="right", fill="both", expand=True)
+
+        # Panel izquierdo: Calendario
+        calendar_label = ctk.CTkLabel(
+            self.left_panel,
+            text="Calendario",
+            font=("Roboto", 16, "bold")
+        )
+        calendar_label.pack(padx=15, pady=(15, 5), anchor="w")
+
+        # Contenedor para el calendario tradicional
+        calendar_container = ctk.CTkFrame(self.left_panel, fg_color="transparent")
+        calendar_container.pack(padx=15, pady=10, fill="both", expand=True)
+
+        # Usar tkcalendar en un contenedor
+        self.calendar = Calendar(
+            calendar_container,
+            selectmode='day',
+            locale='es_ES',
+            date_pattern='dd/mm/yyyy',
+            background="#FFFFFF",
+            foreground="#000000",
+            headersbackground="#6774BD",
+            headersforeground="#FFFFFF",
+            selectbackground="#28C7A2",
+            selectforeground="#FFFFFF",
+            normalbackground="#FFFFFF",
+            normalforeground="#000000",
+            weekendbackground="#F0F1FA",
+            weekendforeground="#000000",
+        )
+        self.calendar.pack(padx=5, pady=5, fill="both", expand=True)
         self.calendar.bind("<<CalendarSelected>>", self.on_date_selected)
 
-        # Parte derecha: Filtros y controles
-        self.filter_frame = ttk.LabelFrame(self.top_frame, text="Filtros")
-        self.filter_frame.pack(side=tk.RIGHT, padx=10, pady=5, fill=tk.BOTH, expand=True)
+        # Panel derecho: Filtros
+        filter_label = ctk.CTkLabel(
+            self.right_panel,
+            text="Filtros",
+            font=("Roboto", 16, "bold")
+        )
+        filter_label.pack(padx=15, pady=(15, 5), anchor="w")
+
+        # Marco para filtros
+        filters_frame = ctk.CTkFrame(self.right_panel, fg_color="transparent")
+        filters_frame.pack(padx=15, pady=5, fill="x")
 
         # Control de fecha
-        ttk.Label(self.filter_frame, text="Fecha:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-        self.date_entry = DateEntry(self.filter_frame, width=12, background='darkblue',
-                                    foreground='white', borderwidth=2, date_pattern='dd/mm/yyyy')
-        self.date_entry.grid(row=0, column=1, padx=5, pady=5, sticky=tk.W)
+        date_frame = ctk.CTkFrame(filters_frame, fg_color="transparent")
+        date_frame.pack(fill="x", pady=5)
+
+        date_label = ctk.CTkLabel(date_frame, text="Fecha:", width=80)
+        date_label.pack(side="left", padx=(0, 10))
+
+        date_container = ctk.CTkFrame(date_frame, fg_color="transparent", height=30)
+        date_container.pack(side="left", fill="x", expand=True)
+
+        # DateEntry colocado en el contenedor
+        self.date_entry = DateEntry(
+            date_container,
+            width=12,
+            background='#6774BD',
+            foreground='white',
+            borderwidth=0,
+            date_pattern='dd/mm/yyyy'
+        )
+        self.date_entry.pack(fill="both", expand=True)
         self.date_entry.bind("<<DateEntrySelected>>", self.on_date_entry_selected)
 
         # Filtro por paciente
-        ttk.Label(self.filter_frame, text="Paciente:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-        self.patient_var = tk.StringVar()
-        self.patient_combo = ttk.Combobox(self.filter_frame, textvariable=self.patient_var, width=20)
-        self.patient_combo.grid(row=1, column=1, padx=5, pady=5, sticky=tk.W)
-        self.load_patients_combo()
+        patient_frame = ctk.CTkFrame(filters_frame, fg_color="transparent")
+        patient_frame.pack(fill="x", pady=5)
+
+        patient_label = ctk.CTkLabel(patient_frame, text="Paciente:", width=80)
+        patient_label.pack(side="left", padx=(0, 10))
+
+        self.patient_var = ctk.StringVar(value="Todos")
+        self.patient_combo = ctk.CTkComboBox(
+            patient_frame,
+            variable=self.patient_var,
+            width=200,
+            values=["Cargando..."],
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.patient_combo.pack(side="left", fill="x", expand=True)
 
         # Filtro por estado
-        ttk.Label(self.filter_frame, text="Estado:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-        self.status_var = tk.StringVar(value="Todos")
-        self.status_combo = ttk.Combobox(self.filter_frame, textvariable=self.status_var, width=20)
-        self.status_combo['values'] = ("Todos", "Programada", "Confirmada", "Completada", "Cancelada")
-        self.status_combo.grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+        status_frame = ctk.CTkFrame(filters_frame, fg_color="transparent")
+        status_frame.pack(fill="x", pady=5)
+
+        status_label = ctk.CTkLabel(status_frame, text="Estado:", width=80)
+        status_label.pack(side="left", padx=(0, 10))
+
+        self.status_var = ctk.StringVar(value="Todos")
+        self.status_combo = ctk.CTkComboBox(
+            status_frame,
+            variable=self.status_var,
+            values=["Todos", "Programada", "Confirmada", "Completada", "Cancelada"],
+            width=200,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.status_combo.pack(side="left", fill="x", expand=True)
+
+        # Filtro por tipo de seguro
+        insurance_frame = ctk.CTkFrame(filters_frame, fg_color="transparent")
+        insurance_frame.pack(fill="x", pady=5)
+
+        insurance_label = ctk.CTkLabel(insurance_frame, text="Seguro:", width=80)
+        insurance_label.pack(side="left", padx=(0, 10))
+
+        self.insurance_var = ctk.StringVar(value="Todos")
+        self.insurance_combo = ctk.CTkComboBox(
+            insurance_frame,
+            variable=self.insurance_var,
+            values=["Todos", "Health", "Auto Insurance", "Long-term Disability", "Life"],
+            width=200,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.insurance_combo.pack(side="left", fill="x", expand=True)
 
         # Botón de búsqueda
-        self.search_button = ttk.Button(self.filter_frame, text="Buscar", command=self.search_appointments)
-        self.search_button.grid(row=3, column=0, columnspan=2, padx=5, pady=10)
+        self.search_button = ctk.CTkButton(
+            self.right_panel,
+            text="Buscar",
+            font=("Roboto", 14),
+            fg_color="#6774BD",
+            hover_color="#5363BD",
+            corner_radius=8,
+            command=self.search_appointments
+        )
+        self.search_button.pack(padx=15, pady=15)
 
-        # Marco para botones de acción
-        self.action_frame = ttk.Frame(self)
-        self.action_frame.pack(fill=tk.X, pady=5)
+        # Marco para acciones
+        self.action_frame = ctk.CTkFrame(self, fg_color="transparent")
+        self.action_frame.pack(fill="x", padx=20, pady=(10, 5))
+
+        # Contador de citas seleccionadas
+        self.selection_label = ctk.CTkLabel(
+            self.action_frame,
+            text="10 citas",
+            font=("Roboto", 14)
+        )
+        self.selection_label.pack(side="left")
 
         # Botones de acción
-        self.new_button = ttk.Button(self.action_frame, text="Nueva Cita", command=self.new_appointment)
-        self.new_button.pack(side=tk.LEFT, padx=5)
+        button_styles = {
+            "font": ("Roboto", 13),
+            "corner_radius": 8,
+            "height": 32,
+            "border_spacing": 5
+        }
 
-        self.edit_button = ttk.Button(self.action_frame, text="Editar Cita", command=self.edit_appointment)
-        self.edit_button.pack(side=tk.LEFT, padx=5)
+        self.edit_button = ctk.CTkButton(
+            self.action_frame,
+            text="Editar",
+            fg_color="#6774BD",
+            hover_color="#5363BD",
+            command=self.edit_appointment,
+            **button_styles
+        )
+        self.edit_button.pack(side="right", padx=5)
 
-        self.cancel_button = ttk.Button(self.action_frame, text="Cancelar Cita", command=self.cancel_appointment)
-        self.cancel_button.pack(side=tk.LEFT, padx=5)
+        self.cancel_button = ctk.CTkButton(
+            self.action_frame,
+            text="Cancelar",
+            fg_color="#FF5A75",
+            hover_color="#E54568",
+            command=self.cancel_appointment,
+            **button_styles
+        )
+        self.cancel_button.pack(side="right", padx=5)
 
-        self.complete_button = ttk.Button(self.action_frame, text="Completar Cita", command=self.complete_appointment)
-        self.complete_button.pack(side=tk.LEFT, padx=5)
+        self.email_button = ctk.CTkButton(
+            self.action_frame,
+            text="Enviar Recordatorio",
+            fg_color="#FF9A3D",
+            hover_color="#E58B35",
+            command=self.send_reminder,
+            **button_styles
+        )
+        self.email_button.pack(side="right", padx=5)
 
-        self.email_button = ttk.Button(self.action_frame, text="Enviar Recordatorio", command=self.send_reminder)
-        self.email_button.pack(side=tk.LEFT, padx=5)
+        self.complete_button = ctk.CTkButton(
+            self.action_frame,
+            text="Completar",
+            fg_color="#28C7A2",
+            hover_color="#1DAA8B",
+            command=self.complete_appointment,
+            **button_styles
+        )
+        self.complete_button.pack(side="right", padx=5)
 
-        # Marco para la tabla de citas
-        self.table_frame = ttk.LabelFrame(self, text="Citas")
-        self.table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        # Crear tabla - SOLO EL CONTENEDOR, SIN ENCABEZADOS
+        self.table_frame = ctk.CTkFrame(self, fg_color="#FFFFFF")
+        self.table_frame.pack(fill="both", expand=True, padx=20, pady=10)
 
-        # Tabla de citas
-        self.setup_appointments_table()
+        # Configurar grid con 9 columnas (para coincidir con tus encabezados)
+        for i in range(9):
+            self.table_frame.grid_columnconfigure(i, weight=1 if i > 0 else 0)
 
-    def setup_appointments_table(self):
-        """Configura la tabla de citas"""
-        columns = ("id", "patient", "date", "time", "status", "notes")
-        self.appointments_table = ttk.Treeview(self.table_frame, columns=columns, show='headings')
+        # Scrollable area para las filas
+        self.rows_canvas = ctk.CTkCanvas(self.table_frame, bg="#FFFFFF", highlightthickness=0)
+        self.rows_canvas.grid(row=1, column=0, columnspan=9, sticky="nsew")
 
-        # Definir encabezados
-        self.appointments_table.heading("id", text="ID")
-        self.appointments_table.heading("patient", text="Paciente")
-        self.appointments_table.heading("date", text="Fecha")
-        self.appointments_table.heading("time", text="Hora")
-        self.appointments_table.heading("status", text="Estado")
-        self.appointments_table.heading("notes", text="Notas")
+        self.scrollbar = ctk.CTkScrollbar(self.table_frame, command=self.rows_canvas.yview)
+        self.scrollbar.grid(row=1, column=9, sticky="ns")
 
-        # Configurar columnas
-        self.appointments_table.column("id", width=50)
-        self.appointments_table.column("patient", width=200)
-        self.appointments_table.column("date", width=100)
-        self.appointments_table.column("time", width=100)
-        self.appointments_table.column("status", width=100)
-        self.appointments_table.column("notes", width=200)
+        self.rows_canvas.configure(yscrollcommand=self.scrollbar.set)
 
-        # Añadir scrollbars
-        scrollbar_y = ttk.Scrollbar(self.table_frame, orient=tk.VERTICAL, command=self.appointments_table.yview)
-        self.appointments_table.configure(yscroll=scrollbar_y.set)
-        scrollbar_y.pack(side=tk.RIGHT, fill=tk.Y)
+        self.rows_frame = ctk.CTkFrame(self.rows_canvas, fg_color="#FFFFFF")
+        self.rows_canvas.create_window((0, 0), window=self.rows_frame, anchor="nw")
 
-        scrollbar_x = ttk.Scrollbar(self.table_frame, orient=tk.HORIZONTAL, command=self.appointments_table.xview)
-        self.appointments_table.configure(xscroll=scrollbar_x.set)
-        scrollbar_x.pack(side=tk.BOTTOM, fill=tk.X)
+        self.rows_frame.bind("<Configure>",
+                             lambda e: self.rows_canvas.configure(scrollregion=self.rows_canvas.bbox("all")))
 
-        self.appointments_table.pack(fill=tk.BOTH, expand=True)
+        # Ajustar altura de la tabla
+        self.table_frame.grid_rowconfigure(1, weight=1)
 
+    def load_appointments_table(self):
+        """Carga las citas en formato de tabla"""
 
-        # Vincular evento de doble clic
-        self.appointments_table.bind("<Double-1>", self.on_double_click_edit)
-
-    def on_double_click_edit(self):
-        self.edit_appointment()
-
-    def load_patients_combo(self):
-        """Carga la lista de pacientes en el combobox"""
-        patients = self.patient_manager.get_all_patients()
-        print(patients)  # Debug
-        patient_values = ["Todos"] + [f"{p['nombre']} {p['apellidos']} (ID: {p['id']})" for p in patients]
-        self.patient_combo['values'] = patient_values
-        self.patient_var.set("Todos")
-
-    def load_appointments(self, date=None, patient_id=None, status=None):
-        """Carga las citas según los filtros aplicados"""
-        # Limpiar tabla
-        for item in self.appointments_table.get_children():
-            self.appointments_table.delete(item)
+        # Limpiar filas anteriores
+        for widget in self.rows_frame.winfo_children():
+            widget.destroy()
 
         # Obtener citas filtradas
-        appointments = self.appointment_manager.get_filtered_appointments(date, patient_id, status)
+        appointments = self.appointment_manager.get_filtered_appointments(
+            self.filter_values["date"],
+            self.filter_values["patient_id"],
+            self.filter_values["status"]
+        )
 
-        # Cargar citas en la tabla
-        for appointment in appointments:
-            patient_name = f"{appointment['patient_first_name']} {appointment['patient_last_name']}"
-            time_str = f"{appointment['start_time']} - {appointment['end_time']}"
+        # Mostrar mensaje si no hay citas
+        if not appointments:
+            no_results = ctk.CTkLabel(
+                self.rows_frame,
+                text="No hay citas que coincidan con los filtros.",
+                font=("Roboto", 14),
+                text_color="#585E6A"
+            )
+            no_results.pack(pady=20)
+            return
 
-            # Status en español
-            status_map = {
-                "scheduled": "Programada",
-                "confirmed": "Confirmada",
-                "completed": "Completada",
-                "cancelled": "Cancelada"
-            }
-            status_text = status_map.get(appointment['status'], appointment['status'])
+        # Encabezados de la tabla
+        headers = [
+            "", "Hora", "Paciente", "Seguro", "Doctor", "Email", "Fecha", "Estado", "Notas"
+        ]
+        for col, header in enumerate(headers):
+            label = ctk.CTkLabel(
+                self.rows_frame,
+                text=header,
+                font=("Roboto", 12, "bold"),
+                anchor="w",
+                text_color="#3B3B3B"
+            )
+            label.grid(row=0, column=col, padx=5, pady=5, sticky="w")
 
-            self.appointments_table.insert("", tk.END, values=(
-                appointment['id'],
-                patient_name,
-                appointment['date'],
-                time_str,
-                status_text,
-                appointment['notes'] if appointment['notes'] else ""
-            ))
+        # Colores
+        insurance_colors = {
+            "health": "#28C7A2",
+            "auto insurance": "#6774BD",
+            "long-term disability": "#FF9A3D",
+            "life": "#FF5A75"
+        }
+
+        status_colors = {
+            "scheduled": "#52AC66",
+            "confirmed": "#28C7A2",
+            "completed": "#6774BD",
+            "cancelled": "#FF5A75"
+        }
+
+        status_text_map = {
+            "scheduled": "Programada",
+            "confirmed": "Confirmada",
+            "completed": "Completada",
+            "cancelled": "Cancelada"
+        }
+
+        # Crear filas
+        for row, appointment in enumerate(appointments, start=1):
+            # Checkbox
+            check_var = ctk.BooleanVar()
+            checkbox = ctk.CTkCheckBox(
+                self.rows_frame,
+                text="",
+                variable=check_var,
+                width=20,
+                checkbox_width=20,
+                checkbox_height=20,
+                command=lambda id=appointment['id'], var=check_var: self.on_appointment_selected(id, var.get())
+            )
+            checkbox.grid(row=row, column=0, padx=5, pady=5, sticky="w")
+
+            # Hora
+            time_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=f"{appointment['start_time']} - {appointment['end_time']}",
+                font=("Roboto", 11),
+                anchor="w"
+            )
+            time_label.grid(row=row, column=1, padx=5, pady=5, sticky="w")
+
+            # Paciente
+            patient_name = f"{appointment.get('patient_first_name', '')} {appointment.get('patient_last_name', '')}"
+            patient_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=patient_name,
+                font=("Roboto", 11),
+                anchor="w"
+            )
+            patient_label.grid(row=row, column=2, padx=5, pady=5, sticky="w")
+
+            # Seguro
+            insurance_type = appointment.get('insurance_type', '')
+            insurance_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=insurance_type.capitalize(),
+                font=("Roboto", 11),
+                text_color=insurance_colors.get(insurance_type.lower(), "#585E6A"),
+                anchor="w"
+            )
+            insurance_label.grid(row=row, column=3, padx=5, pady=5, sticky="w")
+
+            # Doctor
+            doctor_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=appointment.get('doctor', ''),
+                font=("Roboto", 11),
+                text_color="#6774BD",
+                anchor="w"
+            )
+            doctor_label.grid(row=row, column=4, padx=5, pady=5, sticky="w")
+
+            # Email
+            email_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=appointment.get('email', ''),
+                font=("Roboto", 11),
+                text_color="#585E6A",
+                anchor="w"
+            )
+            email_label.grid(row=row, column=5, padx=5, pady=5, sticky="w")
+
+            # Fecha
+            date_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=appointment.get('date', ''),
+                font=("Roboto", 11),
+                text_color="#585E6A",
+                anchor="w"
+            )
+            date_label.grid(row=row, column=6, padx=5, pady=5, sticky="w")
+
+            # Estado
+            status = appointment.get('status', '')
+            status_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=status_text_map.get(status, "Programada"),
+                font=("Roboto", 11, "bold"),
+                text_color=status_colors.get(status, "#52AC66"),
+                anchor="w"
+            )
+            status_label.grid(row=row, column=7, padx=5, pady=5, sticky="w")
+
+            # Notas
+            notes_text = appointment.get('notes', '')
+            if len(notes_text) > 30:
+                notes_text = notes_text[:27] + "..."
+            notes_label = ctk.CTkLabel(
+                self.rows_frame,
+                text=notes_text,
+                font=("Roboto", 11),
+                text_color="#585E6A",
+                anchor="w"
+            )
+            notes_label.grid(row=row, column=8, padx=5, pady=5, sticky="w")
+            # Alternar color de fondo en filas pares
+            if row % 2 == 0:
+                for child in self.rows_frame.winfo_children():
+                    if child.grid_info().get("row") == row:
+                        child.configure(bg_color="#F5F7FA")
+
+    def edit_appointment(self, appointment_id=None):
+        """Editar cita (seleccionada o específica)"""
+        if appointment_id is None:
+            if len(self.selected_appointments) != 1:
+                CTkMessagebox(
+                    title="Selección",
+                    message="Por favor, seleccione exactamente una cita para editar.",
+                    icon="warning"
+                )
+                return
+            appointment_id = list(self.selected_appointments)[0]
+
+        self.selected_appointments = {appointment_id}
+        self.update_button_states()
+        AppointmentDialog(self, "editar", appointment_id)
 
     def on_date_selected(self, event=None):
         """Maneja la selección de fecha en el calendario"""
@@ -211,11 +517,37 @@ class AppointmentsFrame(ttk.Frame):
         self.date_entry.set_date(datetime.strptime(selected_date, "%d/%m/%Y"))
         self.search_appointments()
 
-    def on_date_entry_selected(self):
+    def on_date_entry_selected(self, event=None):
         """Maneja la selección de fecha en el entry"""
         selected_date = self.date_entry.get_date()
         self.calendar.selection_set(selected_date)
         self.search_appointments()
+
+    def on_appointment_selected(self, appointment_id, is_selected):
+        """Gestiona la selección de una cita"""
+        if is_selected:
+            self.selected_appointments.add(appointment_id)
+        else:
+            self.selected_appointments.discard(appointment_id)
+
+        # Actualizar etiqueta de selección
+        count = len(self.selected_appointments)
+        self.selection_label.configure(text=f"{count} {'cita seleccionada' if count == 1 else 'citas seleccionadas'}")
+
+        # Actualizar estado de botones
+        self.update_button_states()
+
+    def update_button_states(self):
+        """Actualiza el estado de los botones según la selección"""
+        has_selection = len(self.selected_appointments) > 0
+
+        # Botones que requieren selección
+        for btn in [self.edit_button, self.cancel_button, self.complete_button, self.email_button]:
+            btn.configure(state="normal" if has_selection else "disabled")
+
+        # La edición solo funciona con una selección
+        if len(self.selected_appointments) != 1:
+            self.edit_button.configure(state="disabled")
 
     def search_appointments(self):
         """Busca citas según los filtros aplicados"""
@@ -242,278 +574,475 @@ class AppointmentsFrame(ttk.Frame):
             }
             status = status_map.get(self.status_var.get())
 
-        # Cargar citas filtradas
-        self.load_appointments(date_str, patient_id, status)
+        # Obtener tipo de seguro
+        insurance_type = None
+        if self.insurance_var.get() != "Todos":
+            insurance_type = self.insurance_var.get().lower()
+
+        # Actualizar los valores de filtro
+        self.filter_values = {
+            "date": date_str,
+            "patient_id": patient_id,
+            "status": status,
+            "insurance_type": insurance_type
+        }
+
+        # Cargar citas filtradas en formato de tabla
+        self.load_appointments_table()
 
     def new_appointment(self):
         """Abre el diálogo para crear una nueva cita"""
-        AppointmentDialog(self, "nueva")
-
-    def edit_appointment(self):
-        """Edita la cita seleccionada"""
-        selected_item = self.appointments_table.selection()
-        if not selected_item:
-            messagebox.showwarning("Selección", "Por favor, seleccione una cita para editar.")
-            return
-
-        appointment_id = self.appointments_table.item(selected_item[0], "values")[0]
-        AppointmentDialog(self, "editar", appointment_id)
+        dialog = AppointmentDialog(self, mode="nueva")
+        dialog.grab_set()  # Previene que se use la ventana principal hasta cerrar el diálogo
 
     def cancel_appointment(self):
-        """Cancela la cita seleccionada"""
-        selected_item = self.appointments_table.selection()
-        if not selected_item:
-            messagebox.showwarning("Selección", "Por favor, seleccione una cita para cancelar.")
+        """Cancela las citas seleccionadas"""
+        if not self.selected_appointments:
+            CTkMessagebox(title="Selección",
+                          message="Por favor, seleccione al menos una cita para cancelar.",
+                          icon="warning")
             return
-
-        # Obtener datos de la cita seleccionada
-        appointment_data = self.appointments_table.item(selected_item[0], "values")
-        appointment_id = appointment_data[0]
-        patient_name = appointment_data[1]
 
         # Confirmar cancelación
-        confirm = messagebox.askyesno(
-            "Confirmar Cancelación",
-            f"¿Está seguro que desea cancelar la cita de {patient_name} (ID: {appointment_id})?"
-        )
+        count = len(self.selected_appointments)
+        confirm_msg = f"¿Está seguro que desea cancelar {count} {'cita' if count == 1 else 'citas'}?"
 
-        if confirm:
+        dialog = CTkMessagebox(title="Confirmar Cancelación",
+                               message=confirm_msg,
+                               icon="question",
+                               option_1="Cancelar",
+                               option_2="Confirmar")
+
+        response = dialog.get()
+        if response == "Confirmar":
             try:
-                # Actualizar estado en la base de datos
-                success = self.appointment_manager.update_appointment_status(
-                    appointment_id,
-                    "cancelled"
-                )
+                # Actualizar estado en la base de datos para cada cita seleccionada
+                for appointment_id in self.selected_appointments:
+                    success = self.appointment_manager.update_appointment_status(
+                        appointment_id,
+                        "cancelled"
+                    )
 
-                if success:
-                    messagebox.showinfo(
-                        "Éxito",
-                        f"Cita {appointment_id} cancelada correctamente."
-                    )
-                    # Actualizar tabla
-                    self.search_appointments()
-                else:
-                    messagebox.showerror(
-                        "Error",
-                        "No se pudo cancelar la cita. Intente nuevamente."
-                    )
+                    if not success:
+                        CTkMessagebox(title="Error",
+                                      message=f"No se pudo cancelar la cita {appointment_id}.",
+                                      icon="error")
+                        return
+
+                CTkMessagebox(title="Éxito",
+                              message=f"{count} {'cita cancelada' if count == 1 else 'citas canceladas'} correctamente.",
+                              icon="info")
+
+                # Actualizar tabla
+                self.search_appointments()
+
             except Exception as e:
-                messagebox.showerror(
-                    "Error",
-                    f"Ocurrió un error al cancelar la cita: {str(e)}"
-                )
-
+                CTkMessagebox(title="Error",
+                              message=f"Ocurrió un error al cancelar las citas: {str(e)}",
+                              icon="error")
 
     def complete_appointment(self):
-        """Marca la cita seleccionada como completada"""
-        selected_item = self.appointments_table.selection()
-        if not selected_item:
-            messagebox.showwarning("Selección", "Por favor, seleccione una cita para marcar como completada.")
+        """Marca las citas seleccionadas como completadas"""
+        if not self.selected_appointments:
+            CTkMessagebox(title="Selección",
+                          message="Por favor, seleccione al menos una cita para marcar como completada.",
+                          icon="warning")
             return
 
-        appointment_id = self.appointments_table.item(selected_item[0], "values")[0]
-
         try:
-            success = self.appointment_manager.update_appointment_status(
-                appointment_id,
-                "completed"
-            )
+            count = len(self.selected_appointments)
+            for appointment_id in self.selected_appointments:
+                success = self.appointment_manager.update_appointment_status(
+                    appointment_id,
+                    "completed"
+                )
 
-            if success:
-                messagebox.showinfo("Éxito", "Cita marcada como completada.")
-                self.search_appointments()
-            else:
-                messagebox.showerror("Error", "No se pudo actualizar la cita.")
+                if not success:
+                    CTkMessagebox(title="Error",
+                                  message=f"No se pudo completar la cita {appointment_id}.",
+                                  icon="error")
+                    return
+
+            CTkMessagebox(title="Éxito",
+                          message=f"{count} {'cita marcada' if count == 1 else 'citas marcadas'} como completada.",
+                          icon="info")
+
+            # Actualizar tabla
+            self.search_appointments()
+
         except Exception as e:
-            messagebox.showerror("Error", f"Error al completar cita: {str(e)}")
+            CTkMessagebox(title="Error",
+                          message=f"Ocurrió un error al completar la(s) cita(s): {str(e)}",
+                          icon="error")
 
     def send_reminder(self):
-        """Envía un recordatorio por email para la cita seleccionada"""
-        selected_item = self.appointments_table.selection()
-        if not selected_item:
-            messagebox.showwarning("Selección", "Por favor, seleccione una cita para enviar recordatorio.")
+        """Envía recordatorios por email para las citas seleccionadas"""
+        if not self.selected_appointments:
+            CTkMessagebox(title="Selección",
+                          message="Por favor, seleccione al menos una cita para enviar recordatorio.",
+                          icon="warning")
             return
 
-        appointment_data = self.appointments_table.item(selected_item[0], "values")
-        appointment_id = appointment_data[0]
-
         try:
-            # Obtener datos completos de la cita
-            appointment = self.appointment_manager.get_appointment_by_id(appointment_id)
-            if not appointment:
-                messagebox.showerror("Error", "No se encontró la cita seleccionada.")
-                return
+            count = len(self.selected_appointments)
+            success_count = 0
 
-            # Usamos los nombres de campos consistentes
-            patient = self.patient_manager.get_patient_by_id(appointment['patient_id'])
-            if not patient:
-                messagebox.showerror("Error", "No se encontró el paciente asociado a esta cita.")
-                return
+            for appointment_id in self.selected_appointments:
+                # Obtener datos de la cita
+                appointment = self.appointment_manager.get_appointment_by_id(appointment_id)
+                if not appointment:
+                    continue
 
-            # Construir mensaje usando los nombres correctos de los campos
-            subject = f"Recordatorio de cita - {appointment['date']} {appointment['start_time']}"
-            body = f"""
-            Estimado/a {patient['nombre']} {patient['apellidos']},
+                # Obtener datos del paciente
+                patient = self.patient_manager.get_patient_by_id(appointment['patient_id'])
+                if not patient or not patient.get('email'):
+                    continue
 
-            Le recordamos su cita programada para:
+                # Enviar email
+                send_success = send_appointment_email(
+                    to_email=patient['email'],
+                    patient_name=f"{patient.get('nombre', '')} {patient.get('apellidos', '')}",
+                    appointment_date=appointment['date'],
+                    appointment_time=appointment['start_time'],
+                    doctor_name=appointment.get('doctor', ''),
+                    location=appointment.get('location', '')
+                )
 
-            Fecha: {appointment['date']}
-            Hora: {appointment['start_time']} - {appointment['end_time']}
+                if send_success:
+                    success_count += 1
 
-            Notas: {appointment.get('notes', 'Ninguna')}
-
-            Por favor confirme su asistencia.
-            """
-
-            # Verificar que el email existe
-            if not patient.get('email'):
-                messagebox.showerror("Error", "El paciente no tiene un email registrado.")
-                return
-
-            # Enviar email
-            send_appointment_email(patient['email'], subject, body)
-            messagebox.showinfo("Éxito", "Recordatorio enviado correctamente.")
+            CTkMessagebox(title="Éxito",
+                          message=f"Recordatorios enviados: {success_count} de {count}.",
+                          icon="info")
 
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo enviar el recordatorio: {str(e)}")
+            CTkMessagebox(title="Error",
+                          message=f"Ocurrió un error al enviar recordatorios: {str(e)}",
+                          icon="error")
 
-class AppointmentDialog(tk.Toplevel):
-    def __init__(self, parent, mode: str, appointment_id: Optional[int] = None):
+
+class AppointmentDialog(ctk.CTkToplevel):
+    """Diálogo para crear/editar citas con diseño o"""
+
+    def __init__(self, parent, mode, appointment_id=None):
         super().__init__(parent)
+
         self.parent = parent
         self.mode = mode
         self.appointment_id = appointment_id
-        self.patient_var = tk.StringVar()
-        self.date_var = tk.StringVar()
-        self.start_time_var = tk.StringVar()
-        self.end_time_var = tk.StringVar()
-        self.notes_var = tk.StringVar()
 
+        # Configuración de la ventana
         self.title("Nueva Cita" if mode == "nueva" else "Editar Cita")
-        self.geometry("500x400")
+        self.geometry("600x700")
         self.resizable(False, False)
+
+        # Cargar datos si es edición
+        self.appointment_data = None
+        if mode == "editar":
+            self.appointment_data = self.parent.appointment_manager.get_appointment_by_id(appointment_id)
+            if not self.appointment_data:
+                self.destroy()
+                return
+
+        # Configurar interfaz
         self.setup_ui()
 
-        if mode == "editar":
-            self.load_appointment_data()
+        # Centrar diálogo
+        self._center_on_parent()
+
+    def _center_on_parent(self):
+        """Centra el diálogo sobre la ventana padre"""
+        self.update_idletasks()
+        parent_x = self.parent.winfo_x()
+        parent_y = self.parent.winfo_y()
+        parent_width = self.parent.winfo_width()
+        parent_height = self.parent.winfo_height()
+
+        dialog_width = self.winfo_width()
+        dialog_height = self.winfo_height()
+
+        x = parent_x + (parent_width // 2) - (dialog_width // 2)
+        y = parent_y + (parent_height // 2) - (dialog_height // 2)
+
+        self.geometry(f"+{x}+{y}")
 
     def setup_ui(self):
-        """Configura los elementos de la interfaz"""
-        main_frame = ttk.Frame(self)
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        """Configurar la interfaz del diálogo"""
+        # Frame principal
+        main_frame = ctk.CTkFrame(self, fg_color="#FFFFFF")
+        main_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
+        # Título
+        title_label = ctk.CTkLabel(
+            main_frame,
+            text="Nueva Cita Médica" if self.mode == "nueva" else "Editar Cita Médica",
+            font=("Roboto", 18, "bold"),
+            text_color="#6774BD"
+        )
+        title_label.pack(pady=(10, 20))
+
+        # Marco para el formulario
+        form_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        form_frame.pack(fill="x", padx=20, pady=5)
+
+        # Campos del formulario
+        self._create_form_fields(form_frame)
+
+        # Botones de acción
+        button_frame = ctk.CTkFrame(main_frame, fg_color="transparent")
+        button_frame.pack(fill="x", padx=20, pady=20)
+
+        # Botón Cancelar
+        cancel_button = ctk.CTkButton(
+            button_frame,
+            text="Cancelar",
+            font=("Roboto", 14),
+            fg_color="#FF5A75",
+            hover_color="#E54568",
+            corner_radius=8,
+            command=self.destroy
+        )
+        cancel_button.pack(side="left", padx=5)
+
+        # Botón Guardar
+        save_button = ctk.CTkButton(
+            button_frame,
+            text="Guardar" if self.mode == "nueva" else "Actualizar",
+            font=("Roboto", 14),
+            fg_color="#28C7A2",
+            hover_color="#1DAA8B",
+            corner_radius=8,
+            command=self.save_appointment
+        )
+        save_button.pack(side="right", padx=5)
+
+    def _create_form_fields(self, parent_frame):
+        """Crea los campos del formulario de cita"""
         # Paciente
-        ttk.Label(main_frame, text="Paciente:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        self.patient_combo = ttk.Combobox(main_frame, textvariable=self.patient_var, width=30)
-        self.patient_combo.grid(row=0, column=1, sticky=tk.W, pady=5)
-        self.load_patients()
+        patient_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        patient_frame.pack(fill="x", pady=5)
+
+        patient_label = ctk.CTkLabel(patient_frame, text="Paciente:", width=120)
+        patient_label.pack(side="left", padx=(0, 10))
+
+        self.patient_var = ctk.StringVar()
+        self.patient_combo = ctk.CTkComboBox(
+            patient_frame,
+            variable=self.patient_var,
+            width=300,
+            values=self._load_patient_options(),
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.patient_combo.pack(side="left", fill="x", expand=True)
 
         # Fecha
-        ttk.Label(main_frame, text="Fecha:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.date_entry = DateEntry(main_frame, textvariable=self.date_var, width=12,
-                                  date_pattern='dd/mm/yyyy')
-        self.date_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
+        date_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        date_frame.pack(fill="x", pady=5)
+
+        date_label = ctk.CTkLabel(date_frame, text="Fecha:", width=120)
+        date_label.pack(side="left", padx=(0, 10))
+
+        self.date_entry = DateEntry(
+            date_frame,
+            width=12,
+            background='#6774BD',
+            foreground='white',
+            borderwidth=0,
+            date_pattern='dd/mm/yyyy'
+        )
+        self.date_entry.pack(side="left", fill="x", expand=True)
 
         # Hora de inicio
-        ttk.Label(main_frame, text="Hora Inicio (HH:MM):").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.start_time_combo = ttk.Combobox(main_frame, textvariable=self.start_time_var, width=8)
-        self.start_time_combo['values'] = [f"{h:02d}:{m:02d}" for h in range(8, 20) for m in (0, 15, 30, 45)]
-        self.start_time_combo.grid(row=2, column=1, sticky=tk.W, pady=5)
-        ttk.Label(main_frame, text="Formato: 08:00 - 19:45").grid(row=2, column=2, sticky=tk.W, padx=5)
+        start_time_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        start_time_frame.pack(fill="x", pady=5)
+
+        start_time_label = ctk.CTkLabel(start_time_frame, text="Hora de inicio:", width=120)
+        start_time_label.pack(side="left", padx=(0, 10))
+
+        self.start_time_var = ctk.StringVar(value="09:00")
+        self.start_time_combo = ctk.CTkComboBox(
+            start_time_frame,
+            variable=self.start_time_var,
+            values=[f"{h:02d}:{m:02d}" for h in range(8, 20) for m in [0, 15, 30, 45]],
+            width=300,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.start_time_combo.pack(side="left", fill="x", expand=True)
 
         # Hora de fin
-        ttk.Label(main_frame, text="Hora Fin (HH:MM):").grid(row=3, column=0, sticky=tk.W, pady=5)
-        self.end_time_combo = ttk.Combobox(main_frame, textvariable=self.end_time_var, width=8)
-        self.end_time_combo['values'] = [f"{h:02d}:{m:02d}" for h in range(8, 20) for m in (0, 15, 30, 45)]
-        self.end_time_combo.grid(row=3, column=1, sticky=tk.W, pady=5)
-        ttk.Label(main_frame, text="Formato: 08:15 - 20:00").grid(row=3, column=2, sticky=tk.W, padx=5)
+        end_time_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        end_time_frame.pack(fill="x", pady=5)
+
+        end_time_label = ctk.CTkLabel(end_time_frame, text="Hora de fin:", width=120)
+        end_time_label.pack(side="left", padx=(0, 10))
+
+        self.end_time_var = ctk.StringVar(value="09:30")
+        self.end_time_combo = ctk.CTkComboBox(
+            end_time_frame,
+            variable=self.end_time_var,
+            values=[f"{h:02d}:{m:02d}" for h in range(8, 20) for m in [0, 15, 30, 45]],
+            width=300,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.end_time_combo.pack(side="left", fill="x", expand=True)
+
+        # Doctor
+        doctor_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        doctor_frame.pack(fill="x", pady=5)
+
+        doctor_label = ctk.CTkLabel(doctor_frame, text="Doctor:", width=120)
+        doctor_label.pack(side="left", padx=(0, 10))
+
+        self.doctor_var = ctk.StringVar()
+        self.doctor_combo = ctk.CTkComboBox(
+            doctor_frame,
+            variable=self.doctor_var,
+            values=["Dr. Kristin", "Dr. Colleen", "Dr. Alex"],
+            width=300,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.doctor_combo.pack(side="left", fill="x", expand=True)
+
+        # Tipo de seguro
+        insurance_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        insurance_frame.pack(fill="x", pady=5)
+
+        insurance_label = ctk.CTkLabel(insurance_frame, text="Tipo de seguro:", width=120)
+        insurance_label.pack(side="left", padx=(0, 10))
+
+        self.insurance_var = ctk.StringVar(value="Health")
+        self.insurance_combo = ctk.CTkComboBox(
+            insurance_frame,
+            variable=self.insurance_var,
+            values=["Health", "Auto Insurance", "Long-term Disability", "Life"],
+            width=300,
+            dropdown_fg_color="#FFFFFF",
+            button_color="#6774BD",
+            button_hover_color="#5363BD"
+        )
+        self.insurance_combo.pack(side="left", fill="x", expand=True)
+
+        # Ubicación
+        location_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        location_frame.pack(fill="x", pady=5)
+
+        location_label = ctk.CTkLabel(location_frame, text="Ubicación:", width=120)
+        location_label.pack(side="left", padx=(0, 10))
+
+        self.location_var = ctk.StringVar()
+        self.location_entry = ctk.CTkEntry(
+            location_frame,
+            textvariable=self.location_var,
+            placeholder_text="Ingrese la dirección del consultorio",
+            width=300
+        )
+        self.location_entry.pack(side="left", fill="x", expand=True)
 
         # Notas
-        ttk.Label(main_frame, text="Notas:").grid(row=4, column=0, sticky=tk.NW, pady=5)
-        self.notes_text = tk.Text(main_frame, width=30, height=5)
-        self.notes_text.grid(row=4, column=1, sticky=tk.W, pady=5)
+        notes_frame = ctk.CTkFrame(parent_frame, fg_color="transparent")
+        notes_frame.pack(fill="x", pady=5)
 
-        # Botones
-        button_frame = ttk.Frame(main_frame)
-        button_frame.grid(row=5, column=0, columnspan=2, pady=10)
+        notes_label = ctk.CTkLabel(notes_frame, text="Notas:", width=120)
+        notes_label.pack(side="left", padx=(0, 10))
 
-        ttk.Button(button_frame, text="Guardar", command=self.save_appointment).pack(side=tk.LEFT, padx=5)
-        ttk.Button(button_frame, text="Cancelar", command=self.destroy).pack(side=tk.LEFT, padx=5)
+        self.notes_text = ctk.CTkTextbox(
+            notes_frame,
+            width=300,
+            height=100,
+            font=("Roboto", 12),
+            fg_color="#FFFFFF",
+            border_color="#DCDFE3",
+            border_width=1,
+            corner_radius=5
+        )
+        self.notes_text.pack(side="left", fill="x", expand=True)
 
-    def load_patients(self):
-        """Carga la lista de pacientes en el combobox"""
+        # Cargar datos si es edición
+        if self.mode == "editar" and self.appointment_data:
+            self._load_form_data()
+
+    def _load_patient_options(self):
+        """Carga las opciones de pacientes para el combobox"""
         patients = self.parent.patient_manager.get_all_patients()
-        self.patient_combo['values'] = [f"{p['nombre']} {p['apellidos']} (ID: {p['id']})" for p in patients]
+        return [f"{p['nombre']} {p['apellidos']} (ID: {p['id']})" for p in patients]
 
-    def load_appointment_data(self):
-        """Carga los datos de la cita existente"""
-        if not self.appointment_id:
+    def _load_form_data(self):
+        """Carga los datos de la cita en el formulario"""
+        if not self.appointment_data:
             return
 
-        appointment = self.parent.appointment_manager.get_appointment_by_id(self.appointment_id)
-        if not appointment:
-            messagebox.showerror("Error", "No se pudo cargar la cita.")
-            self.destroy()
+        # Paciente
+        patient = self.parent.patient_manager.get_patient_by_id(self.appointment_data['patient_id'])
+        if patient:
+            patient_text = f"{patient['nombre']} {patient['apellidos']} (ID: {patient['id']})"
+            self.patient_var.set(patient_text)
+
+        # Fecha y hora
+        if self.appointment_data.get('date'):
+            try:
+                date_obj = datetime.strptime(self.appointment_data['date'], "%Y-%m-%d").date()
+                self.date_entry.set_date(date_obj)
+            except:
+                pass
+
+        self.start_time_var.set(self.appointment_data.get('start_time', '09:00'))
+        self.end_time_var.set(self.appointment_data.get('end_time', '09:30'))
+
+        # Doctor y seguro
+        self.doctor_var.set(self.appointment_data.get('doctor', 'Dr. Kristin'))
+        self.insurance_var.set(self.appointment_data.get('insurance_type', 'Health').capitalize())
+
+        # Ubicación y notas
+        self.location_var.set(self.appointment_data.get('location', ''))
+        self.notes_text.insert("1.0", self.appointment_data.get('notes', ''))
+
+    def save_appointment(self, e=None):
+        """Guarda o actualiza la cita"""
+        if not self.patient_var.get():
+            CTkMessagebox(title="Error", message="Debe seleccionar un paciente.", icon="warning")
             return
 
-        patient = self.parent.patient_manager.get_patient_by_id(appointment['patient_id'])
-        self.patient_var.set(f"{patient['nombre']} {patient['apellidos']} (ID: {patient['id']})")
-        self.date_var.set(appointment['date'])
-        self.start_time_var.set(appointment['start_time'])
-        self.end_time_var.set(appointment['end_time'])
-        self.notes_text.insert("1.0", appointment.get('notes', ''))
+        # Extraer ID del paciente
+        match = re.search(r'ID: (\d+)', self.patient_var.get())
+        if not match:
+            CTkMessagebox(title="Error", message="No se pudo identificar al paciente seleccionado.", icon="warning")
+            return
 
-    def save_appointment(self):
-        """Guarda los cambios de la cita"""
+        patient_id = int(match.group(1))
+
+        # Preparar datos de la cita
+        appointment_data = {
+            'patient_id': patient_id,
+            'date': self.date_entry.get_date().strftime("%Y-%m-%d"),
+            'start_time': self.start_time_var.get(),
+            'end_time': self.end_time_var.get(),
+            'doctor': self.doctor_var.get(),
+            'reason': self.notes_text.get("1.0", "end-1c"),
+            'status': 'scheduled'
+        }
+
         try:
-            # Validar datos
-            if not self.patient_var.get():
-                messagebox.showerror("Error", "Seleccione un paciente.")
-                return
-
-            # Extraer ID del paciente
-            match = re.search(r'ID: (\d+)', self.patient_var.get())
-            if not match:
-                messagebox.showerror("Error", "Formato de paciente inválido.")
-                return
-            patient_id = int(match.group(1))
-
-            date = self.date_entry.get_date().strftime("%Y-%m-%d")
-            start_time = self.start_time_var.get()
-            end_time = self.end_time_var.get()
-            notes = self.notes_text.get("1.0", tk.END).strip()
-
-            # Verificar disponibilidad (solo para citas nuevas)
             if self.mode == "nueva":
-                if not self.parent.appointment_manager.is_time_available(date, start_time, end_time):
-                    messagebox.showerror("Error", "El horario seleccionado no está disponible.")
-                    return
-
-            # Crear/actualizar cita
-            appointment_data = {
-                'patient_id': patient_id,
-                'date': date,
-                'start_time': start_time,
-                'end_time': end_time,
-                'notes': notes
-            }
-
-            if self.mode == "nueva":
-                appointment_id = self.parent.appointment_manager.create_appointment(
-                    patient_id, date, start_time, end_time, "", notes
-                )
-                if appointment_id:
-                    messagebox.showinfo("Éxito", "Cita creada correctamente.")
+                success = self.parent.appointment_manager.create_appointment(**appointment_data)
+                action_msg = "creada"
             else:
-                success = self.parent.appointment_manager.update_appointment(
-                    self.appointment_id,
-                    appointment_data
-                )
-                if success:
-                    messagebox.showinfo("Éxito", "Cita actualizada correctamente.")
+                success = self.parent.appointment_manager.update_appointment(self.appointment_id, appointment_data)
+                action_msg = "actualizada"
 
-            self.parent.search_appointments()
-            self.destroy()
+            if success:
+                CTkMessagebox(title="Éxito", message=f"Cita {action_msg} correctamente.", icon="info")
+                self.parent.search_appointments()
+                self.destroy()
+            else:
+                CTkMessagebox(title="Error", message=f"Ocurrió un error: {str(e)}", icon="cancel")
 
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo guardar la cita: {str(e)}")
+            CTkMessagebox(title="Error", message=f"Ocurrió un error: {str(e)}", icon="cancel")

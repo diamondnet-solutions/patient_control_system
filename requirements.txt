@@ -3,3 +3,6 @@ tkcalendar==1.6.1       # Widget de calendario para tkinter
 matplotlib~=3.10.1
 pandas~=2.2.3
 fpdf2~=2.8.3
+customtkinter~=5.2.2
+plotly~=6.1.0
+CTkMessagebox~=2.7

@@ -1,7 +1,7 @@
 # Sistema de Gestión Dental
 
 ## Descripción
-El Sistema de Gestión Dental es una aplicación de escritorio desarrollada en Python que permite administrar eficientemente un consultorio dental. La aplicación facilita el registro y control de pacientes, citas, tratamientos y pagos, además de generar reportes útiles para el análisis de la operación del consultorio.
+El Sistema de Gestión de PACIENTES  es una aplicación de escritorio desarrollada en Python que permite administrar eficientemente un consultorio dental. La aplicación facilita el registro y control de pacientes, citas, tratamientos y pagos, además de generar reportes útiles para el análisis de la operación del consultorio.
 
 ## Características principales
 - **Gestión de Citas**: Creación, modificación y cancelación de citas.
@@ -17,7 +17,7 @@ El Sistema de Gestión Dental es una aplicación de escritorio desarrollada en P
 
 ## Tecnologías utilizadas
 - **Python**: Lenguaje de programación principal
-- **Tkinter**: Interfaz gráfica de usuario
+- **CustomTkinter**: Interfaz gráfica de usuario de madera Moderna
 - **SQLite**: Base de datos local
 - **Pillow**: Procesamiento de imágenes para expedientes
 - **Matplotlib/Pandas**: Generación de reportes y análisis de datos
@@ -74,7 +74,7 @@ python -m venv venv
 
 # Activar el entorno virtual
 # En Windows:
-venv\Scripts\activate
+.venv\Scripts\activate
 # En macOS/Linux:
 source venv/bin/activate
 ```

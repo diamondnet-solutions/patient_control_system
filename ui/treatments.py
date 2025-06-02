@@ -6,22 +6,32 @@
 # Empresa: DiamondNetSolutions
 # Autor: Eliazar
 # Fecha de creación: 01/05/2025
+# Versión: 2.0
 # =============================================
 
-import tkinter as tk
-from tkinter import ttk, messagebox
+import customtkinter as ctk
+from tkinter import ttk, messagebox, filedialog
+from PIL import Image, ImageTk
 from datetime import datetime
 from typing import Optional, Dict, Any, List
 import os
+import sys
 
-# Importaciones de módulos internos
+# Configuración inicial de CustomTkinter
+ctk.set_appearance_mode("light")  # Modo claro, oscuro o system
+ctk.set_default_color_theme("blue")  # Temas: blue, green, dark-blue
+
+# Añadir la ruta raíz del proyecto al path de Python
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from core.treatment_manager import TreatmentManager
 from core.patient_manager import PatientManager
-from db.database import DatabaseManager  # Añadido para inicializar los managers
+from db.database import DatabaseManager
+from utils.image_utils import resize_image, save_image
 
 
-class TreatmentsFrame(ttk.Frame):
-    """Frame principal para la gestión de tratamientos médicos"""
+class TreatmentsFrame(ctk.CTkFrame):
+    """Frame principal para la gestión de tratamientos médicos con CustomTkinter"""
 
     def __init__(self, parent):
         """
@@ -32,6 +42,11 @@ class TreatmentsFrame(ttk.Frame):
         """
         super().__init__(parent)
         self.parent = parent
+
+        # Configuración de estilo
+        self.font_title = ctk.CTkFont(family="Roboto", size=16, weight="bold")
+        self.font_label = ctk.CTkFont(family="Roboto", size=12)
+        self.font_input = ctk.CTkFont(family="Roboto", size=12)
 
         # Inicializar managers con DatabaseManager
         db_manager = DatabaseManager()
@@ -59,172 +74,244 @@ class TreatmentsFrame(ttk.Frame):
         self.load_treatments()
         self.load_patients_combo()
 
-        self.pack(fill=tk.BOTH, expand=True)
+        self.pack(fill="both", expand=True)
 
     def setup_ui(self):
         """Configura la interfaz de usuario principal"""
         # Frame principal con pestañas
-        self.notebook = ttk.Notebook(self)
-        self.notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.notebook = ctk.CTkTabview(self)
+        self.notebook.pack(fill="both", expand=True, padx=10, pady=10)
 
-        # Pestaña 1: Catálogo de tratamientos
-        self.treatments_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.treatments_tab, text="Catálogo")
+        # Crear pestañas
+        self.notebook.add("Catálogo")
+        self.notebook.add("Asignación")
+        self.notebook.add("Historial")
+
+        # Configurar cada pestaña
         self.setup_treatments_tab()
-
-        # Pestaña 2: Asignación de tratamientos
-        self.assignment_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.assignment_tab, text="Asignación")
         self.setup_assignment_tab()
-
-        # Pestaña 3: Historial de tratamientos
-        self.history_tab = ttk.Frame(self.notebook)
-        self.notebook.add(self.history_tab, text="Historial")
         self.setup_history_tab()
 
     def setup_treatments_tab(self):
         """Configura la pestaña de catálogo de tratamientos"""
-        # Frame para botones de acción
-        actions_frame = ttk.Frame(self.treatments_tab)
-        actions_frame.pack(fill=tk.X, padx=5, pady=5)
+        tab = self.notebook.tab("Catálogo")
 
-        # Botones de acción
-        ttk.Button(actions_frame, text="Agregar", command=self.add_treatment).pack(side=tk.LEFT, padx=5)
-        ttk.Button(actions_frame, text="Editar", command=self.edit_treatment).pack(side=tk.LEFT, padx=5)
-        ttk.Button(actions_frame, text="Eliminar", command=self.delete_treatment).pack(side=tk.LEFT, padx=5)
-        ttk.Button(actions_frame, text="Actualizar", command=self.load_treatments).pack(side=tk.LEFT, padx=5)
+        # Frame para botones de acción
+        actions_frame = ctk.CTkFrame(tab)
+        actions_frame.pack(fill="x", padx=5, pady=5)
+
+        # Botones de acción con colores semánticos
+        ctk.CTkButton(
+            actions_frame,
+            text="Agregar",
+            command=self.add_treatment,
+            fg_color="#4CAF50",
+            hover_color="#45a049"
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            actions_frame,
+            text="Editar",
+            command=self.edit_treatment,
+            fg_color="#2196F3",
+            hover_color="#0b7dda"
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            actions_frame,
+            text="Eliminar",
+            command=self.delete_treatment,
+            fg_color="#f44336",
+            hover_color="#d32f2f"
+        ).pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            actions_frame,
+            text="Actualizar",
+            command=self.load_treatments
+        ).pack(side="left", padx=5)
 
         # Frame para búsqueda
-        search_frame = ttk.Frame(self.treatments_tab)
-        search_frame.pack(fill=tk.X, padx=5, pady=5)
+        search_frame = ctk.CTkFrame(tab)
+        search_frame.pack(fill="x", padx=5, pady=5)
 
-        ttk.Label(search_frame, text="Buscar:").pack(side=tk.LEFT, padx=5)
-        self.search_entry = ttk.Entry(search_frame, width=30)
-        self.search_entry.pack(side=tk.LEFT, padx=5)
-        ttk.Button(search_frame, text="Buscar", command=self.search_treatments).pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(search_frame, text="Buscar:").pack(side="left", padx=5)
+        self.search_entry = ctk.CTkEntry(search_frame, width=200, placeholder_text="Nombre o descripción...")
+        self.search_entry.pack(side="left", padx=5)
+
+        ctk.CTkButton(
+            search_frame,
+            text="Buscar",
+            command=self.search_treatments,
+            width=80
+        ).pack(side="left", padx=5)
 
         # Tabla de tratamientos
-        table_frame = ttk.Frame(self.treatments_tab)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+        table_frame = ctk.CTkFrame(tab)
+        table_frame.pack(fill="both", expand=True, padx=5, pady=5)
 
         columns = ("id", "nombre", "descripción", "precio", "duración", "categoría")
         self.treatments_table = ttk.Treeview(
             table_frame,
             columns=columns,
             show="headings",
-            selectmode="browse"
+            selectmode="browse",
+            style="mystyle.Treeview"
         )
+
+        # Configurar estilo para el Treeview
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure(
+            "mystyle.Treeview",
+            background="#ffffff",
+            foreground="black",
+            rowheight=30,
+            fieldbackground="#ffffff",
+            borderwidth=0,
+            font=self.font_input
+        )
+        style.map("mystyle.Treeview", background=[('selected', '#0078d7')])
 
         # Configurar columnas
         for col in columns:
             self.treatments_table.heading(col, text=col.capitalize())
-            self.treatments_table.column(col, width=120, anchor=tk.CENTER)
+            self.treatments_table.column(col, width=120, anchor="center")
 
         # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.treatments_table.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar = ctk.CTkScrollbar(table_frame, orientation="vertical", command=self.treatments_table.yview)
+        scrollbar.pack(side="right", fill="y")
         self.treatments_table.configure(yscrollcommand=scrollbar.set)
 
-        self.treatments_table.pack(fill=tk.BOTH, expand=True)
+        self.treatments_table.pack(fill="both", expand=True)
         self.treatments_table.bind("<Double-1>", lambda e: self.edit_treatment())
 
     def setup_assignment_tab(self):
         """Configura la pestaña de asignación de tratamientos"""
-        # Frame para selección de paciente
-        patient_frame = ttk.LabelFrame(self.assignment_tab, text="Seleccionar Paciente")
-        patient_frame.pack(fill=tk.X, padx=10, pady=5)
+        tab = self.notebook.tab("Asignación")
 
-        ttk.Label(patient_frame, text="Paciente:").pack(side=tk.LEFT, padx=5)
-        self.patient_combo = ttk.Combobox(patient_frame, state="readonly")
-        self.patient_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        # Frame para selección de paciente
+        patient_frame = ctk.CTkFrame(tab)
+        patient_frame.pack(fill="x", padx=10, pady=5)
+
+        ctk.CTkLabel(patient_frame, text="Paciente:").pack(side="left", padx=5)
+        self.patient_combo = ctk.CTkComboBox(
+            patient_frame,
+            state="readonly",
+            dropdown_font=self.font_input
+        )
+        self.patient_combo.pack(side="left", padx=5, fill="x", expand=True)
         self.patient_combo.bind("<<ComboboxSelected>>", self.on_patient_selected)
 
         # Frame para selección de tratamiento
-        treatment_frame = ttk.LabelFrame(self.assignment_tab, text="Seleccionar Tratamiento")
-        treatment_frame.pack(fill=tk.X, padx=10, pady=5)
+        treatment_frame = ctk.CTkFrame(tab)
+        treatment_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Label(treatment_frame, text="Tratamiento:").pack(side=tk.LEFT, padx=5)
-        self.treatment_combo = ttk.Combobox(treatment_frame, state="readonly")
-        self.treatment_combo.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        ctk.CTkLabel(treatment_frame, text="Tratamiento:").pack(side="left", padx=5)
+        self.treatment_combo = ctk.CTkComboBox(
+            treatment_frame,
+            state="readonly",
+            dropdown_font=self.font_input
+        )
+        self.treatment_combo.pack(side="left", padx=5, fill="x", expand=True)
         self.treatment_combo.bind("<<ComboboxSelected>>", self.update_treatment_info)
 
         # Frame para información del tratamiento
-        info_frame = ttk.LabelFrame(self.assignment_tab, text="Información del Tratamiento")
-        info_frame.pack(fill=tk.X, padx=10, pady=5)
+        info_frame = ctk.CTkFrame(tab)
+        info_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Label(info_frame, text="Precio:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
-        self.price_label = ttk.Label(info_frame, text="$0.00")
-        self.price_label.grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
+        # Grid layout para información
+        ctk.CTkLabel(info_frame, text="Precio estándar:").grid(row=0, column=0, sticky="w", padx=5, pady=2)
+        self.price_label = ctk.CTkLabel(info_frame, text="$0.00", font=self.font_label)
+        self.price_label.grid(row=0, column=1, sticky="w", padx=5, pady=2)
 
-        ttk.Label(info_frame, text="Duración:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
-        self.duration_label = ttk.Label(info_frame, text="0 minutos")
-        self.duration_label.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        ctk.CTkLabel(info_frame, text="Duración estimada:").grid(row=1, column=0, sticky="w", padx=5, pady=2)
+        self.duration_label = ctk.CTkLabel(info_frame, text="0 minutos", font=self.font_label)
+        self.duration_label.grid(row=1, column=1, sticky="w", padx=5, pady=2)
 
         # Campo para precio personalizado
-        ttk.Label(info_frame, text="Precio personalizado:").grid(row=2, column=0, sticky=tk.W, padx=5, pady=2)
-        self.custom_price_entry = ttk.Entry(info_frame)
-        self.custom_price_entry.grid(row=2, column=1, sticky=tk.W, padx=5, pady=2)
+        ctk.CTkLabel(info_frame, text="Precio personalizado:").grid(row=2, column=0, sticky="w", padx=5, pady=2)
+        self.custom_price_entry = ctk.CTkEntry(info_frame, placeholder_text="Opcional", font=self.font_input)
+        self.custom_price_entry.grid(row=2, column=1, sticky="w", padx=5, pady=2)
 
         # Campo para notas
-        ttk.Label(info_frame, text="Notas:").grid(row=3, column=0, sticky=tk.W, padx=5, pady=2)
-        self.notes_entry = ttk.Entry(info_frame)
-        self.notes_entry.grid(row=3, column=1, sticky=tk.W, padx=5, pady=2, columnspan=2)
+        ctk.CTkLabel(info_frame, text="Notas:").grid(row=3, column=0, sticky="nw", padx=5, pady=2)
+        self.notes_entry = ctk.CTkTextbox(info_frame, height=60, font=self.font_input)
+        self.notes_entry.grid(row=3, column=1, sticky="ew", padx=5, pady=2)
+
+        # Configurar peso de columnas
+        info_frame.columnconfigure(1, weight=1)
 
         # Botón para asignar tratamiento
-        ttk.Button(
-            self.assignment_tab,
+        ctk.CTkButton(
+            tab,
             text="Asignar Tratamiento",
-            command=self.assign_treatment
+            command=self.assign_treatment,
+            fg_color="#4CAF50",
+            hover_color="#45a049"
         ).pack(pady=10)
 
     def setup_history_tab(self):
         """Configura la pestaña de historial de tratamientos"""
+        tab = self.notebook.tab("Historial")
+
         # Frame para filtros
-        filter_frame = ttk.Frame(self.history_tab)
-        filter_frame.pack(fill=tk.X, padx=10, pady=5)
+        filter_frame = ctk.CTkFrame(tab)
+        filter_frame.pack(fill="x", padx=10, pady=5)
 
-        ttk.Label(filter_frame, text="Paciente:").pack(side=tk.LEFT, padx=5)
-        self.history_patient_combo = ttk.Combobox(filter_frame, state="readonly")
-        self.history_patient_combo.pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(filter_frame, text="Paciente:").pack(side="left", padx=5)
+        self.history_patient_combo = ctk.CTkComboBox(
+            filter_frame,
+            state="readonly",
+            width=200,
+            dropdown_font=self.font_input
+        )
+        self.history_patient_combo.pack(side="left", padx=5)
 
-        ttk.Label(filter_frame, text="Fecha desde:").pack(side=tk.LEFT, padx=5)
-        self.date_from_entry = ttk.Entry(filter_frame, width=10)
-        self.date_from_entry.pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(filter_frame, text="Fecha desde:").pack(side="left", padx=5)
+        self.date_from_entry = ctk.CTkEntry(filter_frame, width=100, placeholder_text="DD/MM/AAAA")
+        self.date_from_entry.pack(side="left", padx=5)
         self.date_from_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
 
-        ttk.Label(filter_frame, text="Fecha hasta:").pack(side=tk.LEFT, padx=5)
-        self.date_to_entry = ttk.Entry(filter_frame, width=10)
-        self.date_to_entry.pack(side=tk.LEFT, padx=5)
+        ctk.CTkLabel(filter_frame, text="Fecha hasta:").pack(side="left", padx=5)
+        self.date_to_entry = ctk.CTkEntry(filter_frame, width=100, placeholder_text="DD/MM/AAAA")
+        self.date_to_entry.pack(side="left", padx=5)
         self.date_to_entry.insert(0, datetime.now().strftime("%d/%m/%Y"))
 
-        ttk.Button(filter_frame, text="Filtrar", command=self.filter_history).pack(side=tk.LEFT, padx=5)
+        ctk.CTkButton(
+            filter_frame,
+            text="Filtrar",
+            command=self.filter_history,
+            width=80
+        ).pack(side="left", padx=5)
 
         # Tabla de historial
-        table_frame = ttk.Frame(self.history_tab)
-        table_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        table_frame = ctk.CTkFrame(tab)
+        table_frame.pack(fill="both", expand=True, padx=10, pady=5)
 
         columns = ("id", "fecha", "paciente", "tratamiento", "precio", "estado")
         self.history_table = ttk.Treeview(
             table_frame,
             columns=columns,
             show="headings",
-            selectmode="browse"
+            selectmode="browse",
+            style="mystyle.Treeview"
         )
 
         # Configurar columnas
         for col in columns:
             self.history_table.heading(col, text=col.capitalize())
-            self.history_table.column(col, width=120, anchor=tk.CENTER)
+            self.history_table.column(col, width=120, anchor="center")
 
         # Scrollbar
-        scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=self.history_table.yview)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        scrollbar = ctk.CTkScrollbar(table_frame, orientation="vertical", command=self.history_table.yview)
+        scrollbar.pack(side="right", fill="y")
         self.history_table.configure(yscrollcommand=scrollbar.set)
 
-        self.history_table.pack(fill=tk.BOTH, expand=True)
+        self.history_table.pack(fill="both", expand=True)
 
     # ==================================================================
-    # MÉTODOS DE FUNCIONALIDAD
+    # MÉTODOS DE FUNCIONALIDAD (igual que en la versión original)
     # ==================================================================
 
     def load_treatments(self):
@@ -248,7 +335,7 @@ class TreatmentsFrame(ttk.Frame):
                 treatment_list.append(f"{treatment['id']} - {treatment['name']}")
 
             # Actualizar combobox de tratamientos
-            self.treatment_combo['values'] = treatment_list
+            self.treatment_combo.configure(values=treatment_list)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudieron cargar los tratamientos: {str(e)}")
@@ -259,8 +346,8 @@ class TreatmentsFrame(ttk.Frame):
             patients = self.patient_manager.get_all_patients()
             patient_list = [f"{p['id']} - {p['nombre']} {p['apellidos']}" for p in patients]
 
-            self.patient_combo['values'] = patient_list
-            self.history_patient_combo['values'] = patient_list
+            self.patient_combo.configure(values=patient_list)
+            self.history_patient_combo.configure(values=patient_list)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudieron cargar los pacientes: {str(e)}")
@@ -275,39 +362,51 @@ class TreatmentsFrame(ttk.Frame):
         """Muestra diálogo para agregar un nuevo tratamiento"""
         try:
             # Crear ventana de diálogo
-            dialog = tk.Toplevel(self)
+            dialog = ctk.CTkToplevel(self)
             dialog.title("Agregar Nuevo Tratamiento")
             dialog.transient(self)  # Hace que la ventana sea modal respecto a la principal
             dialog.grab_set()  # Impide interactuar con otras ventanas
 
             # Variables de control
-            name_var = tk.StringVar()
-            desc_var = tk.StringVar()
-            price_var = tk.DoubleVar(value=0.0)
-            duration_var = tk.IntVar(value=30)
+            name_var = ctk.StringVar()
+            desc_var = ctk.StringVar()
+            price_var = ctk.DoubleVar(value=0.0)
+            duration_var = ctk.IntVar(value=30)
 
             # Campos del formulario
-            ttk.Label(dialog, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
+            ctk.CTkLabel(dialog, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=name_var, width=300).grid(row=0, column=1, padx=5, pady=5)
 
-            ttk.Label(dialog, text="Descripción:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=desc_var, width=30).grid(row=1, column=1, padx=5, pady=5)
+            ctk.CTkLabel(dialog, text="Descripción:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=desc_var, width=300).grid(row=1, column=1, padx=5, pady=5)
 
-            ttk.Label(dialog, text="Precio:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=price_var, width=10).grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+            ctk.CTkLabel(dialog, text="Precio:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=price_var, width=100).grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-            ttk.Label(dialog, text="Duración (min):").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=duration_var, width=10).grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
+            ctk.CTkLabel(dialog, text="Duración (min):").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=duration_var, width=100).grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
             # Botones
-            btn_frame = ttk.Frame(dialog)
+            btn_frame = ctk.CTkFrame(dialog)
             btn_frame.grid(row=4, column=0, columnspan=2, pady=10)
 
-            ttk.Button(btn_frame, text="Guardar", command=lambda: self.save_new_treatment(
-                dialog, name_var.get(), desc_var.get(), price_var.get(), duration_var.get()
-            )).pack(side=tk.LEFT, padx=5)
+            ctk.CTkButton(
+                btn_frame,
+                text="Guardar",
+                command=lambda: self.save_new_treatment(
+                    dialog, name_var.get(), desc_var.get(), price_var.get(), duration_var.get()
+                ),
+                fg_color="#4CAF50",
+                hover_color="#45a049"
+            ).pack(side="left", padx=5)
 
-            ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+            ctk.CTkButton(
+                btn_frame,
+                text="Cancelar",
+                command=dialog.destroy,
+                fg_color="#607D8B",
+                hover_color="#546E7A"
+            ).pack(side="left", padx=5)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo crear el diálogo: {str(e)}")
@@ -363,39 +462,51 @@ class TreatmentsFrame(ttk.Frame):
                 return
 
             # Crear ventana de diálogo
-            dialog = tk.Toplevel(self)
+            dialog = ctk.CTkToplevel(self)
             dialog.title(f"Editar Tratamiento: {treatment['name']}")
             dialog.transient(self)
             dialog.grab_set()
 
             # Variables de control
-            name_var = tk.StringVar(value=treatment['name'])
-            desc_var = tk.StringVar(value=treatment['description'])
-            price_var = tk.DoubleVar(value=treatment['default_price'])
-            duration_var = tk.IntVar(value=treatment['duration'])
+            name_var = ctk.StringVar(value=treatment['name'])
+            desc_var = ctk.StringVar(value=treatment['description'])
+            price_var = ctk.DoubleVar(value=treatment['default_price'])
+            duration_var = ctk.IntVar(value=treatment['duration'])
 
             # Campos del formulario
-            ttk.Label(dialog, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=name_var, width=30).grid(row=0, column=1, padx=5, pady=5)
+            ctk.CTkLabel(dialog, text="Nombre:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=name_var, width=300).grid(row=0, column=1, padx=5, pady=5)
 
-            ttk.Label(dialog, text="Descripción:").grid(row=1, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=desc_var, width=30).grid(row=1, column=1, padx=5, pady=5)
+            ctk.CTkLabel(dialog, text="Descripción:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=desc_var, width=300).grid(row=1, column=1, padx=5, pady=5)
 
-            ttk.Label(dialog, text="Precio:").grid(row=2, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=price_var, width=10).grid(row=2, column=1, padx=5, pady=5, sticky=tk.W)
+            ctk.CTkLabel(dialog, text="Precio:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=price_var, width=100).grid(row=2, column=1, padx=5, pady=5, sticky="w")
 
-            ttk.Label(dialog, text="Duración (min):").grid(row=3, column=0, padx=5, pady=5, sticky=tk.W)
-            ttk.Entry(dialog, textvariable=duration_var, width=10).grid(row=3, column=1, padx=5, pady=5, sticky=tk.W)
+            ctk.CTkLabel(dialog, text="Duración (min):").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+            ctk.CTkEntry(dialog, textvariable=duration_var, width=100).grid(row=3, column=1, padx=5, pady=5, sticky="w")
 
             # Botones
-            btn_frame = ttk.Frame(dialog)
+            btn_frame = ctk.CTkFrame(dialog)
             btn_frame.grid(row=4, column=0, columnspan=2, pady=10)
 
-            ttk.Button(btn_frame, text="Guardar", command=lambda: self.save_edited_treatment(
-                dialog, treatment_id, name_var.get(), desc_var.get(), price_var.get(), duration_var.get()
-            )).pack(side=tk.LEFT, padx=5)
+            ctk.CTkButton(
+                btn_frame,
+                text="Guardar",
+                command=lambda: self.save_edited_treatment(
+                    dialog, treatment_id, name_var.get(), desc_var.get(), price_var.get(), duration_var.get()
+                ),
+                fg_color="#4CAF50",
+                hover_color="#45a049"
+            ).pack(side="left", padx=5)
 
-            ttk.Button(btn_frame, text="Cancelar", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+            ctk.CTkButton(
+                btn_frame,
+                text="Cancelar",
+                command=dialog.destroy,
+                fg_color="#607D8B",
+                hover_color="#546E7A"
+            ).pack(side="left", padx=5)
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo editar el tratamiento: {str(e)}")
@@ -508,8 +619,8 @@ class TreatmentsFrame(ttk.Frame):
             treatment = self.treatment_manager.get_treatment_by_id(treatment_id)
 
             if treatment:
-                self.price_label.config(text=f"${treatment['default_price']:.2f}")
-                self.duration_label.config(text=f"{treatment['duration']} minutos")
+                self.price_label.configure(text=f"${treatment['default_price']:.2f}")
+                self.duration_label.configure(text=f"{treatment['duration']} minutos")
                 self.current_treatment_id = treatment_id
 
         except Exception as e:
@@ -540,7 +651,7 @@ class TreatmentsFrame(ttk.Frame):
                     return
 
             # Obtener notas
-            notes = self.notes_entry.get().strip() or None
+            notes = self.notes_entry.get("1.0", "end").strip() or None
 
             # Aquí necesitaríamos el ID de la cita, pero como no está en el contexto,
             # vamos a simular que creamos una cita primero
@@ -572,8 +683,8 @@ class TreatmentsFrame(ttk.Frame):
                 messagebox.showinfo("Éxito", f"Tratamiento asignado correctamente (ID: {assignment_id})")
 
                 # Limpiar campos
-                self.custom_price_entry.delete(0, tk.END)
-                self.notes_entry.delete(0, tk.END)
+                self.custom_price_entry.delete(0, "end")
+                self.notes_entry.delete("1.0", "end")
 
                 # Actualizar historial
                 self.filter_history()

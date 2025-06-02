@@ -35,6 +35,7 @@ from db.database import DatabaseManager
 
 
 class AppointmentManager:
+
     """
     Clase para gestionar las citas médicas en el sistema.
 
@@ -44,7 +45,6 @@ class AppointmentManager:
     - Enviar notificaciones por correo electrónico
     - Generar reportes de citas
     """
-
     def __init__(self, db_manager: DatabaseManager = None):
         """
         Inicializa el gestor de citas.
@@ -120,7 +120,8 @@ class AppointmentManager:
                 'start_time': start_time,
                 'end_time': end_time,
                 'status': status,
-                'notes': reason
+                'notes': reason,
+                'doctor': doctor
             }
 
             appointment_id = self.db_manager.insert_record('appointments', appointment_data)
@@ -487,7 +488,17 @@ class AppointmentManager:
     def get_filtered_appointments(self, date=None, patient_id=None, status=None):
         """Obtiene citas filtradas por fecha, paciente o estado"""
         query = """
-                SELECT a.*, p.first_name as patient_first_name, p.last_name as patient_last_name
+                SELECT a.id, \
+                       a.date, \
+                       a.start_time, \
+                       a.end_time, \
+                       a.doctor, \
+                       a.status, \
+                       a.notes, \
+                       p.first_name AS patient_first_name, \
+                       p.last_name  AS patient_last_name, \
+                       p.insurance_type, \
+                       p.email
                 FROM appointments a
                          JOIN patients p ON a.patient_id = p.id
                 WHERE 1 = 1 \
@@ -593,3 +604,56 @@ class AppointmentManager:
         except Exception as e:
             print(f"Error al calcular slots disponibles: {e}")
             return []
+
+    def get_upcoming_appointments(self) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Obtiene y organiza las próximas citas médicas en tres categorías:
+        - Hoy
+        - Mañana
+        - Próximos días (hasta 7 días después de hoy)
+
+        Returns:
+            Dict[str, List[Dict[str, Any]]]: Diccionario con las citas agrupadas por fecha.
+        """
+        today = datetime.today().date()
+        tomorrow = today + timedelta(days=1)
+        upcoming_limit = today + timedelta(days=7)
+
+        query = """
+            SELECT a.id,
+                   a.date,
+                   a.start_time,
+                   a.end_time,
+                   a.doctor,
+                   a.status,
+                   a.notes,
+                   p.first_name AS patient_first_name,
+                   p.last_name  AS patient_last_name,
+                   p.insurance_type,
+                   p.email
+            FROM appointments a
+            JOIN patients p ON a.patient_id = p.id
+            WHERE a.date BETWEEN ? AND ?
+              AND a.status != 'cancelled'
+            ORDER BY a.date, a.start_time
+        """
+        params = [today.isoformat(), upcoming_limit.isoformat()]
+        results = self.db_manager.execute_query(query, params, fetch_all=True)
+
+        # Clasificación de citas por día
+        categorized = {
+            "today": [],
+            "tomorrow": [],
+            "upcoming": []
+        }
+
+        for row in results:
+            appointment_date = datetime.strptime(row["date"], "%Y-%m-%d").date()
+            if appointment_date == today:
+                categorized["today"].append(row)
+            elif appointment_date == tomorrow:
+                categorized["tomorrow"].append(row)
+            else:
+                categorized["upcoming"].append(row)
+
+        return categorized
